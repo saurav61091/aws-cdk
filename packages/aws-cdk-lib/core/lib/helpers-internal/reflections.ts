@@ -1,5 +1,43 @@
 import type { IConstruct } from 'constructs';
 import { CfnResource } from '../cfn-resource';
+import { isResolvableObject } from '../token';
+
+/**
+ * Safely traverses a nested property path on an object, returning a fallback
+ * if any value along the path is an unresolved token (`IResolvable`).
+ *
+ * Array indexing is supported using numeric path segments (e.g. `'rules.0.name'`).
+ *
+ * Return value semantics:
+ * - Returns the resolved value if the full path is reachable and no segment is a token.
+ * - Returns `undefined` if a segment along the path is `null` or `undefined`,
+ *   meaning the property was never configured.
+ * - Returns the `fallback` if a segment (or the leaf) is an `IResolvable` token,
+ *   meaning the property is configured but its value can't be inspected at synthesis time.
+ *
+ * @param obj - The root object to traverse.
+ * @param path - Dot-separated property path.
+ * @param fallback - Value to return when an unresolved token is encountered.
+ */
+export function resolvedGet<T>(obj: any, path: string, fallback: T): any | T {
+  let current = obj;
+  for (const key of path.split('.')) {
+    // Property not configured — return undefined
+    if (current == null) {
+      return undefined;
+    }
+    // Property is a token — configured but unreadable at synthesis time
+    if (isResolvableObject(current)) {
+      return fallback;
+    }
+    current = current[key];
+  }
+  // Leaf value is a token — configured but unreadable at synthesis time
+  if (isResolvableObject(current)) {
+    return fallback;
+  }
+  return current;
+}
 
 /**
  * Finds the closest related resource in the construct tree.
